@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Homework A</title>
+    <meta charset="utf-8">
+    <style>
+        body {
+            margin: 0px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+
+<div id="container"></div>
+
+<script src="js/three.js"></script>
+
+<script id="texVertShader" type="x-shader/x-vertex">
+
+	//Three.js gives us these automatically when a perspective camera is bound to the renderer
+	uniform mat4 modelMatrix;
+	uniform mat4 viewMatrix;
+    uniform mat4 projectionMatrix;
+
+
+	//Since we are using BufferGeometry, we have defined the attributes that we need manually
+    attribute vec3 position;
+	//attribute vec2 texCoords;
+    attribute vec2 uv;
+
+	//link variables between the vertex shader and the fragment shader
+	//textured coordinates
+	varying vec2 UV;
+
+	void main() {
+
+        //get the vertex position in CAMERA coordinates
+        vec4 position = viewMatrix * modelMatrix * vec4(position, 1.0);
+
+		//pass our interpolated texCoords to the fragment shader
+	   	UV = uv;
+
+        //of course, we always have to output our vertices in clip coords by multiplying through a projection matrix.
+        gl_Position = projectionMatrix * position;
+
+    }
+
+
+
+
+
+
+</script>
+
+<script id="texFragShader" type="x-shader/x-fragment">
+
+	precision mediump float;
+
+	//special data type used to access texture stored on GPU
+	//pointer to image data
+	uniform sampler2D t1;
+
+	//this has to have the same name as in the vertex shader. Here, in the fragment shader, we interpolate across the textureCoordinates
+	varying vec2 UV;
+
+    void main() {
+
+	    //vec4 c1 = texture2D(t1, UV);
+
+        gl_FragColor = texture2D(t1, UV);
+        //gl_FragColor = vec4(1.0,0.0,0.0,1.0);
+	}
+
+
+
+
+
+
+</script>
+
+<script id="PhongVertShader" type="x-shader/x-vertex">
+
+	//Three.js gives us these automatically when a perspective camera is bound to the renderer
+	uniform mat4 modelMatrix;
+	uniform mat4 viewMatrix;
+    uniform mat4 projectionMatrix;
+
+	//Three.js geometry creates these for us (and also texture coords, which we aren't using here)
+    attribute vec3 position;
+	attribute vec3 normal;
+
+	attribute vec2 uv;
+
+	//texture things
+	//attribute vec2 texCoords;
+	varying vec2 UV;
+
+	//We are explicitly passing these in
+      	uniform vec3 light1_pos;
+      	uniform vec3 light2_pos;
+      	uniform vec3 light3_pos;
+
+	varying vec3 N, L1, L2, L3, V;
+
+	void main() {
+
+            UV = uv;
+
+        	//get the vertex position in CAMERA coordinates
+        	vec4 position = viewMatrix * modelMatrix * vec4(position, 1.0);
+
+        	//use xyz vals to calculate vectors between vertex, light, and camera
+        	vec3 P = position.xyz;
+
+        	//get the normalized vertex normal in CAMERA coordinates
+        	N = vec3(normalize(viewMatrix * modelMatrix * vec4(normal.xyz, 0.0)  ).xyz) ;
+
+        	//the lights positions are defined in WORLD coordinates, we want to put them in CAMERA coordinates too
+        	vec4 L1_cam = viewMatrix * vec4(light1_pos, 1.0);
+        	vec4 L2_cam = viewMatrix * vec4(light2_pos, 1.0);
+        	vec4 L3_cam = viewMatrix * vec4(light3_pos, 1.0);
+
+        	//get the normalized vectors from each light position to the vertex positions
+        	L1 = vec3(normalize(L1_cam - position).xyz);
+        	L2 = vec3(normalize(L2_cam - position).xyz);
+        	L3 = vec3(normalize(L3_cam - position).xyz);
+
+
+        	//reverse direction of position vector to get view vector from vertex to camera
+        	V = normalize(-P);
+
+
+        	//of course, we always have to output our vertices in clip coords by multiplying through a projection matrix.
+        	gl_Position = projectionMatrix * position;
+     	 }
+
+
+
+
+
+</script>
+
+<script id="PhongFragShader" type="x-shader/x-fragment">
+
+	precision mediump float;
+
+        varying vec2 UV;
+      	varying vec3 V, N, L1, L2, L3;
+      	float spec_intensity = 32.0; //higher value indicates more rapid falloff
+
+      	uniform vec3 ambient; //general ambient light in the scene applied to all objects
+
+      	uniform vec3 light1_diffuse;
+      	uniform vec3 light2_diffuse;
+      	uniform vec3 light3_diffuse;
+
+      	uniform vec3 light1_specular;
+      	uniform vec3 light2_specular;
+        uniform vec3 light3_specular;
+
+        uniform sampler2D t1;
+
+      	void main() {
+
+            vec4 c1 = texture2D(t1, UV);
+
+        	vec4 outColor1 = vec4(0.0);
+        	vec4 outColor2 = vec4(0.0);
+        	vec4 outColor3 = vec4(0.0);
+
+        	//diffuse light depends on the angle between the light and the vertex normal
+        	float diff1 = max(0.0, dot(N, L1)); //just to make sure not negative
+        	vec3 color1 = diff1 * light1_diffuse;
+
+        	//specular highlights depend upon the position/orientation of the camera and the direction of the light reflecting off of this geometry
+        	vec3 R1 = normalize(reflect(-L1,N)); //get light vector reflected across the plane defined by the normal of this geometry
+        	float spec1 = pow( max(dot(R1, V), 0.0), spec_intensity); //raising the value to a particular intensity value shrinks the size of the specular highlight so that only a reflection vector (R1) that is very close to the view vector (V) will be applied to this fragment.
+
+        	color1 += spec1 * light1_specular;
+        	if (spec1 > 1.0) {
+          		outColor1 = vec4(light1_specular,1.0);
+        	} else {
+          		outColor1 = clamp(vec4(color1,1.0), 0.0,1.0);
+        	}
+
+
+        	//diffuse2
+        	float diff2 = max(0.0, dot(N, L2));
+        	vec3 color2 = diff2 * light2_diffuse;
+
+
+        	//specular2
+        	vec3 R2 = normalize(reflect(-L2,N));
+
+        	float spec2 = pow( max(dot(R2, V), 0.0), spec_intensity);
+        	color2 += spec2 * light2_specular;
+        	if (spec2 > 1.0) {
+          		outColor2 = vec4(light2_specular,1.0);
+        	} else {
+          		outColor2 = clamp(vec4(color2,1.0), 0.0,1.0);
+        	}
+
+
+            //diffuse3
+        	float diff3 = max(0.0, dot(N, L3));
+        	vec3 color3 = diff3 * light3_diffuse;
+
+
+        	//specular3
+        	vec3 R3 = normalize(reflect(-L3,N));
+
+        	float spec3 = pow( max(dot(R3, V), 0.0), spec_intensity);
+        	color3 += spec3 * light3_specular;
+        	if (spec3 > 1.0) {
+          		outColor3 = vec4(light3_specular,1.0);
+        	} else {
+          		outColor3 = clamp(vec4(color3,1.0), 0.0,1.0);
+        	}
+
+            vec4 outputColor4 = clamp(vec4(ambient, 1.0) + outColor1 + outColor2 + outColor3, 0.0, 1.0);
+        	gl_FragColor = vec4(mix(c1, outputColor4, 0.5)); //add the two lights together, make sure final value is between 0.0 and 1.0
+
+
+	}
+
+
+
+
+
+</script>
+
+
+<script id="WireVertShader" type="x-shader/x-vertex">
+
+    precision mediump float;
+
+    uniform mat4 modelMatrix;
+	uniform mat4 viewMatrix;
+    uniform mat4 projectionMatrix;
+
+	/*uniform vec4 InnerColor;
+	uniform vec4 RimColor;
+	uniform float RimPower;
+	uniform float AdditionalPower;
+	*/
+
+	//attribute vec4 clippingPlanes;
+
+    uniform float changeVar;
+
+	attribute vec3 normal;
+	attribute vec3 position;
+
+	varying vec3 N;
+	varying vec3 modelPos;
+
+	void main() {
+
+			vec4 position1 = viewMatrix * modelMatrix * vec4(position, 1.0);
+
+			vec3 tempPos = position;
+			modelPos = tempPos;
+
+			N = vec3(normalize(viewMatrix * modelMatrix * vec4(normal.xyz, 0.0)  ).xyz) ;
+			gl_Position = projectionMatrix * position1;
+		}
+
+</script>
+
+<script id="WireFragShader" type="x-shader/x-fragment">
+
+        precision mediump float;
+
+        /*uniform vec4 InnerColor;
+	    uniform vec4 RimColor;
+	    uniform float RimPower;
+	    uniform float AdditionalPower;
+        */
+
+        uniform float changeVar;
+
+		varying vec3 N;
+		varying vec3 modelPos;
+
+		void main() {
+
+            /*
+            vec3 R1 = 1-saturate(normalize(viewDir)); //get light vector reflected across the plane defined by the normal of this geometry
+        	float val1 = pow( max(dot(R1, V), 0.0), spec_intensity); //raising the value to a particular intensity value shrinks the size of the specular highlight so that only a reflection vector (R1) that is very close to the view vector (V) will be applied to this fragment.
+
+        	color1 += val1 * light1_specular;
+
+
+            vec3 rim = 1.0 - viewDir;
+            vec4 outColor1 = InnerColor;
+        	vec4 outColor2 = RimColor * pow(rim * AdditionalPower, RimPower);
+            //vec4 outColor2 = RimColor;
+
+            //gl_FragColor = InnerColor;
+        	gl_FragColor = clamp(outColor1 + outColor2, 0.0, 1.0); //add the two lights together, make sure final value is between 0.0 and 1.0
+            */
+
+            if (modelPos.y > changeVar*4.0+3.8) {
+                discard;
+            } else {
+                gl_FragColor =  vec4(changeVar, changeVar, changeVar, 1.0);
+            }
+            //gl_FragColor =  vec4(0.0, 0, 0, 1.0);
+
+
+		}
+
+
+</script>
+
+<script>
+
+    var container;
+
+    var camera, scene, renderer;
+
+    var vs = document.getElementById('texVertShader').textContent;
+    var fs = document.getElementById('texFragShader').textContent;
+
+    var vsPhong = document.getElementById('PhongVertShader').textContent;
+    var fsPhong = document.getElementById('PhongFragShader').textContent;
+
+    var vsRef = document.getElementById('WireVertShader').textContent;
+    var fsRef = document.getElementById('WireFragShader').textContent;
+
+    var fanMesh;
+    var phongmaterial;
+
+    var crystalMesh;
+    var texmaterial;
+
+    var lanternMesh;
+    var refmaterial;
+
+    var changeVar = 0.0;
+    //loading in textures
+    var metalTex = new THREE.TextureLoader().load('metal.jpg');
+    var iceTex = new THREE.TextureLoader().load('ice.png');
+
+    //uv map
+    //var iceMap = new THREE.TextureLoader().load('crystalUV.png');
+    var mouseX = 0.0;
+    var mouseY = 0.0;
+
+    //var loader = new THREE.JSONLoader();
+    //loader.load("Model/crystal.json", handle.load)
+
+    init();
+    animate();
+
+
+    function init() {
+
+        container = document.getElementById('container');
+
+        camera = new THREE.PerspectiveCamera(60.0, window.innerWidth / window.innerHeight, 0.1, 50);
+        camera.position.z = 20;
+        camera.position.y = 1;
+        //camera.rotation.y += 10;
+
+        scene = new THREE.Scene();
+
+
+        //lights
+        // lights
+        var ambient = new THREE.Vector3(0.1, 0.1, 0.1);
+
+        var light1_pos = new THREE.Vector3(0.0, 10.0, 0.0); //from above
+        var light1_diffuse = new THREE.Vector3(1.0, 0.0, 0.0);
+        var light1_specular = new THREE.Vector3(1.0, 1.0, 1.0);
+
+        var light2_pos = new THREE.Vector3(-10.0, 0.0, 0.0); //from the left
+        var light2_diffuse = new THREE.Vector3(0.0, 0.0, 1.0);
+        var light2_specular = new THREE.Vector3(1.0, 1.0, 1.0);
+
+        var light3_pos = new THREE.Vector3(5, 0.0, 0.0); //from right
+        var light3_diffuse = new THREE.Vector3(0.0, 0.5, 0.0);
+        var light3_specular = new THREE.Vector3(1.0, 1.0, 1.0);
+
+        // materials (ie, linking to the shader program)
+        var uniforms = {
+            ambient: {type: "v3", value: ambient},
+            light1_pos: {type: "v3", value: light1_pos},
+            light1_diffuse: {type: "v3", value: light1_diffuse},
+            light1_specular: {type: "v3", value: light1_specular},
+            light2_pos: {type: "v3", value: light2_pos},
+            light2_diffuse: {type: "v3", value: light2_diffuse},
+            light2_specular: {type: "v3", value: light2_specular},
+            light3_pos: {type: "v3", value: light3_pos},
+            light3_diffuse: {type: "v3", value: light3_diffuse},
+            light3_specular: {type: "v3", value: light3_specular},
+            t1: { type: "t", value: metalTex  },
+
+        };
+
+        var uniforms2 = {
+            t1: { type: "t", value: iceTex  },
+
+        };
+
+        var clipPlane = new THREE.Plane(new THREE.Vector3(-7.0, 2, 0), 1 );
+
+        /*var InnerColor = new THREE.Vector4(1.0, 0.0, 0.0, 1.0);
+        var RimColor = new THREE.Vector4(0.0, 1.0, 0.0, 1.0);
+        var RimPower = 3.0;
+        var AdditionalPower = 1.1;
+        */
+
+        var uniforms3 = {
+            /*
+            InnerColor: {type: "v4", value: InnerColor},
+            RimColor: {type: "v4", value: RimColor},
+            RimPower: { type: "f", value: RimPower  },
+            AdditionalPower: { type: "f", value: AdditionalPower  },
+               */
+             changeVar: { type: "f", value: changeVar  },
+	    };
+
+        phongmaterial = new THREE.RawShaderMaterial({
+            uniforms: uniforms,
+            vertexShader: vsPhong,
+            fragmentShader: fsPhong,
+        });
+
+        texmaterial = new THREE.RawShaderMaterial({
+            uniforms: uniforms2,
+            vertexShader: vs,
+            fragmentShader: fs,
+        });
+
+        refmaterial = new THREE.RawShaderMaterial({
+            uniforms: uniforms3,
+            vertexShader: vsRef,
+            fragmentShader: fsRef,
+        });
+
+        // materials (ie, linking to the shader program)
+        //copying texture data onto GPU
+        //when pass in uniform, you are passing in pointer to GPU
+        //loading is for data being copied to GPU
+        //value is like a pointer
+        //in general, a shader can only access to a finite number of textures at any time
+        //t is prestored on GPU
+        /*var uniforms = {
+            t1: {type: "t", value: texture1},
+            t2: {type: "t", value: texture2},
+            mixVal: {type: "f", value: 0.0},
+        };*/
+
+        var loader = new THREE.JSONLoader();
+
+        //1 Fan Mesh
+        fanMesh = new THREE.Mesh();
+        loader.load("Model/fan.json", function handle_load(geometry, materials) {
+            //var mat0 = new THREE.MeshNormalMaterial();
+
+
+            fanMesh.geometry = geometry;
+            fanMesh.material = phongmaterial;
+            //fanMesh.addAttribute('position', new THREE.BufferAttribute( geometry, 3 ));
+            //geometry.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+		    //geometry.addAttribute( 'texCoords', new THREE.BufferAttribute( texCoords, 2 ) );
+
+            scene.add(fanMesh);
+        });
+
+        //2 Crystal Mesh
+        crystalMesh = new THREE.Mesh();
+        //var texCoordsC;
+        //var crystalJson = loader.parse("Model/crystal.json");
+        loader.load("Model/crystal.json", function handle_load2(geometry, materials) {
+            //var mat0 = new THREE.MeshNormalMaterial();
+            crystalMesh.geometry = geometry;
+            //texCoordsC = new Float32Array(geometry.faceVertexUvs[0]);
+            //console.log(geometry);
+            //getUVs(texCoordsC, crystalMesh.geometry.faceVertexUvs[0]);
+            //texCoordsC = crystalMesh.geometry.faceVertexUvs[0];
+            //console.log(texCoordsC);
+
+
+            //crystalMesh.geometry.uvsNeedUpdate = true;
+            crystalMesh.material = texmaterial;
+            //crystalMesh.geometry.addAttribute( 'texCoords', new THREE.BufferAttribute( texCoordsC, 2 ) );
+            //iceTex.mapping = geometry.faceVertexUvs;
+            //fanMesh.addAttribute('position', new THREE.BufferAttribute( geometry, 3 ));
+            //geometry.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+		    //geometry.addAttribute( 'texCoords', new THREE.BufferAttribute( texCoords, 2 ) );
+            //geometry.addAttribute( 'texCoords', new THREE.BufferAttribute( texCoords, 2 ) );
+            //console.log(crystalMesh);
+            crystalMesh.translateX(-7.0);
+            crystalMesh.material.side = THREE.DoubleSide;
+            scene.add(crystalMesh);
+        });
+
+        lanternMesh = new THREE.Mesh();
+        loader.load("Model/lantern.json", function handle_load3(geometry, materials) {
+            //var mat0 = new THREE.MeshNormalMaterial();
+            lanternMesh.geometry = geometry;
+
+            //console.log(geometry);
+            //getUVs(texCoordsC, crystalMesh.geometry.faceVertexUvs[0]);
+            //texCoordsC = crystalMesh.geometry.faceVertexUvs[0];
+            //console.log(texCoordsC);
+
+
+            //crystalMesh.geometry.uvsNeedUpdate = true;
+            lanternMesh.material = refmaterial;
+
+            console.log(lanternMesh);
+            lanternMesh.translateX(8.0);
+            //lanternMesh.translateY(-2.0);
+            //lanternMesh.translateZ(5.0);
+            lanternMesh.scale.set(2, 3, 2);
+            //lanternMesh.scale.set(new THREE.Vector3(2.0, 2.0, 1.0));
+            //lanternMesh.material.clipping = true;
+            lanternMesh.material.wireframe = true;
+           // lanternMesh.material.clippingPlanes = [clipPlane];
+            lanternMesh.material.side = THREE.DoubleSide;
+            scene.add(lanternMesh);
+        });
+
+        //attribute vec3 position;
+	    //attribute vec3 normal;
+
+        renderer = new THREE.WebGLRenderer();
+        renderer.setClearColor(0x999999);
+        //renderer.clippingPlanes = [clipPlane];
+        renderer.localClippingEnabled = true;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+
+        //make it so that resizing the browser window also resizes the scene
+        window.addEventListener('resize', onWindowResize, false);
+        document.addEventListener('mousemove', onDocumentMouseMove, false);
+
+    }
+
+
+    function animate() {
+
+        requestAnimationFrame(animate);
+        render();
+
+    }
+
+    function render() {
+
+        var time = performance.now();
+
+        crystalMesh.rotation.x = time * 0.0005;
+        //mesh1.material.uniforms.mixVal.value = mouseX;
+        fanMesh.position.y = (2 * Math.cos(time * 0.002));
+        //fanMesh.rotation.x = time * 0.001;
+        lanternMesh.rotation.y = time * 0.001;
+        lanternMesh.position.z = 4* Math.sin(time * 0.002);
+        changeVar = Math.sin(time);
+        if (lanternMesh.material.uniforms!= null) {
+            lanternMesh.material.uniforms.changeVar.value = Math.sin(time * 0.001);
+
+        }
+
+        if (fanMesh.material.uniforms != null) {
+            fanMesh.material.uniforms.light1_pos.value = new THREE.Vector3(2* Math.sin(time * 0.002), 4.0, 0.0);
+            fanMesh.material.uniforms.light2_pos.value = new THREE.Vector3(0.0, 4* Math.sin(time * 0.003), 0.0);
+            fanMesh.material.uniforms.light3_pos.value = new THREE.Vector3(0.5, 0.0, -3* Math.sin(time * 0.002));
+            //new THREE.Vector3(Math.sin(time * 0.001), 5.0, 0.0);
+
+        }
+        //lanternMesh.material.uniforms.changeVar.value = Math.sin(time * 0.001);
+        //mesh.rotation.y = -time * 0.0005;
+        //mesh0.position.x = 10;
+        renderer.render(scene, camera);
+    }
+
+    function onDocumentMouseMove(event) {
+        event.preventDefault();
+        mouseX = (event.clientX / window.innerWidth);
+        mouseY = -(event.clientY / window.innerHeight);
+    }
+
+
+    function onWindowResize(event) {
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+    }
+
+    /*function getUVs(array, uvcoords) {
+        console.log('getting uv');
+        for (var i = 0; i < uvcoords.length; i++) {
+            for (var j = 0; j < uvcoords[i].length; j++) {
+                for (var k = 0; k < uvcoords[j].length; k++) {
+                    console.log('adding');
+                    array.push(uvcoords[k]);
+                }
+            }
+        }
+    }*/
+
+
+</script>
+
+</body>
+</html>
+
