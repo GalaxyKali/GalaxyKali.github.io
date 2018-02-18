@@ -10,6 +10,8 @@ Part A consists of a volcanic island inside a skybox.  The skybox is an inverted
 
 There are many controls you can manipulate in this scene.  These controls include setting the height of the terrain, setting the max height (so you can have a plataeu of sorts), and manipulating the water's swell and height.  
 
+The water has a reflective shader on it, so you will have to move the camera around to see the reflection/refraction.  
+
 The slider on mixFactor1 is my most favorite gui use.  I recommend you use it and see the effect.  
 
 ****I went for the extra credit and added a fresnel effect to the water.  You can play with the fresnel settings, too.
