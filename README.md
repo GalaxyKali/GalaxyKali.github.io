@@ -17,6 +17,7 @@ __HW1__
 Part D in git hub repo
 
 __HW2__
+
 [Part A](HW2/A/Homework 2 Part A.html)
 
 [Part B](HW2/B/Homework 2 Part B.html)
