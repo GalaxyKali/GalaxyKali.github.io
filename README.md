@@ -27,3 +27,5 @@ __HW3__
 [Part A](HW3/A/Homework 3 Part A.html)
 
 [Part B](HW3/B/Homework 3 Part B.html)
+
+Part C in HW3 git hub repo
