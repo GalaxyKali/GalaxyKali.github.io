@@ -21,3 +21,9 @@ __HW2__
 [Part A](HW2/A/Homework 2 Part A.html)
 
 [Part B](HW2/B/Homework 2 Part B.html)
+
+__HW3__
+
+[Part A](HW3/A/Homework 3 Part A.html)
+
+[Part B](HW3/B/Homework 3 Part B.html)
